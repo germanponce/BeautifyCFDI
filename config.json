@@ -1,0 +1,46 @@
+{
+    "userInfo": {
+        "useDefault": "true",
+        "user": {
+            "nombre": "miNombre",
+            "domicilio": "miDomicilio",
+            "contactInfo": "miContacto"
+        }
+    },
+    "clientesInfo": {
+        "useDefault": "true",
+        "clientesDict": {
+            "RFC_Receptor": {
+                "nombre": "nombreCliente",
+                "domicilio": "domicilioCliente"
+            }
+        }
+    },
+    "conceptosInfo": {
+        "useDefault": "true",
+        "conceptosDict": {
+            "ClaveProdServ": {
+                "ClaveProdServ": "miClave",
+                "Descripcion": "miDescripcion",
+                "Unidad": "miUnidad"
+            }
+        }
+    },
+    "displayConfig": {
+        "ID_CFDI_format": "%datetime%_%rfc:emisor%_%rfc_receptor%",
+        "ID_CFDI_encabezado": "true",
+        "ID_CFDI_pie": "false",
+        "ID_CFDI_codigoBarras_pie": "true",
+        "infoContacto_encabezado": "true",
+        "infoContacto_pie": "false"
+    },
+    "fileConfig": {
+        "htmlTemplate": "",
+        "styleTemplate": "",
+        "useB64": "false",
+        "b64Dict": {
+            "htmlTemplate": "",
+            "styleTemplate": ""
+        }
+    }
+}
