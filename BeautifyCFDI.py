@@ -23,6 +23,12 @@ def getDatosEmisor(CFDI: minidom.Document, configDict: dict):
     except Exception as e:
         raise ValueError("El archivo de configuración tiene un error: {0}".format(e))
 
+    # Verificamos si el usuario quiere sobreescribir opciones
+    try:
+        useDefault = configEmisor.get("useDefault")
+    except Exception as e:
+        raise ValueError("El archivo de configuración tiene un error: {0}".format(e))
+
     # Obtenemos la raiz del documento
     Comprobante = CFDI.getElementsByTagName("cfdi:Comprobante")[0]
     EmisorNode = Comprobante.getElementsByTagName("cfdi:Emisor")[0]
@@ -42,8 +48,9 @@ def getDatosEmisor(CFDI: minidom.Document, configDict: dict):
     emisor.update(RegimenEmisor = RegimenEmisor)
     emisor.update(DomicilioEmisor = DomicilioEmisor)
     emisor.update(ContactoEmisor = ContactoEmisor)
-    # Verificamos si el usuario quiere sobreescribir opciones
-    if configEmisor.get("useDefault") is False:
+
+    # Si el usuario quiere sobreescribir
+    if useDefault is False:
         emisor.update(NombreEmisor = configEmisor["user"].get("nombre") )
         emisor.update(DomicilioEmisor = configEmisor["user"].get("domicilio") )
         emisor.update(ContactoEmisor = configEmisor["user"].get("contacto") )
@@ -56,6 +63,12 @@ def getDatosReceptor(CFDI: minidom.Document, configDict: dict):
     # Obtenemos configuración del Receptor
     try:
         configReceptor = configDict.get("clientesInfo")
+    except Exception as e:
+        raise ValueError("El archivo de configuración tiene un error: {0}".format(e))
+
+    # Verificamos si el usuario quiere sobreescribir opciones
+    try:
+        useDefault = configReceptor.get("useDefault")
     except Exception as e:
         raise ValueError("El archivo de configuración tiene un error: {0}".format(e))
 
@@ -76,9 +89,9 @@ def getDatosReceptor(CFDI: minidom.Document, configDict: dict):
     receptor.update(RfcReceptor = RfcReceptor)
     receptor.update(UsoReceptor = UsoReceptor)
     receptor.update(DomicilioReceptor = DomicilioReceptor)
-    # Verificamos si el usuario quiere sobreescribir opciones
-    if configReceptor.get("useDefault") is False:
 
+    # Si el usuario quiere sobreescribir
+    if useDefault is False:
         if configReceptor["clientesDict"].get(RfcReceptor, None) is None:
             print("\tNo se encontró información para el cliente con RFC {0}".format(RfcReceptor))
         else:
@@ -90,6 +103,90 @@ def getDatosReceptor(CFDI: minidom.Document, configDict: dict):
     # Regresamos datos del receptor
     return receptor
 
+def getConceptos(CFDI: minidom.Document, configDict: dict):
+    
+    # Obtenemos configuración de los conceptos
+    try:
+        configConceptos = configDict.get("conceptosInfo")
+    except Exception as e:
+        raise ValueError("El archivo de configuración tiene un error: {0}".format(e))
+
+    # Obtenemos la raiz del documento y el nodo de conceptos
+    Comprobante = CFDI.getElementsByTagName("cfdi:Comprobante")[0]
+    ConceptosNode = Comprobante.getElementsByTagName("cfdi:Conceptos")[0]
+
+    # Verificamos si el usuario quiere sobreescribir sus conceptos
+    if configConceptos.get("useDefault") is False:
+        pass
+
+    # Obtenemos una lista de los conceptos registrados
+    ConceptosList = ConceptosNode.getElementsByTagName("cfdi:Concepto")
+
+    # Creamos una lista con los datos de los conceptos
+    conceptos = list()
+
+    # Iteramos por cada concepto
+    for ConceptoNode in ConceptosList:
+
+        # Creamos un diccionario para contener información del concepto
+        concepto = dict()
+
+        # Obtenemos cantidad, claveProd, claveUnidad, Descripción, Importe, Valor Unitario
+        cantidad = ConceptoNode.getAttribute("Cantidad")
+        claveProd = ConceptoNode.getAttribute("ClaveProdServ")
+        claveUnidad = ConceptoNode.getAttribute("ClaveUnidad")
+        descripcion = ConceptoNode.getAttribute("Descripcion")
+        importe = ConceptoNode.getAttribute("Importe")
+        valorUnitario = ConceptoNode.getAttribute("ValorUnitario")
+        concepto.update(Cantidad = cantidad)
+        concepto.update(ClaveProdServ = claveProd)
+        concepto.update(ClaveUnidad = claveUnidad)
+        concepto.update(Descripcion = descripcion)
+        concepto.update(Importe = importe)
+        concepto.update(ValorUnitario = valorUnitario)
+
+        # Creamos una lista de impuesto para contener información de los impuestos
+        impuestos = dict()
+
+        # Obtenemos datos de los impuestos
+        ImpuestosNode = ConceptoNode.getElementsByTagName("cfdi:Impuestos")[0]
+
+        # Creamos una lista de traslados y retenciones        
+        trasladosList = ImpuestosNode.getElementsByTagName("cfdi:Traslado")
+        retencionesList = ImpuestosNode.getElementsByTagName("cfdi:Retencion")
+
+        # Iteramos por cada impuesto en traslado y retención
+        for ImpuestoNode in (trasladosList + retencionesList):
+
+            #Creamos un diccionario para contener la información del impuesto
+            impuesto = dict()
+
+            #Obtenemos tipo de impuesto y tipo de factor
+            tipoImpuesto = ImpuestoNode.tagName.split(":")[1]
+            factor = ImpuestoNode.getAttribute("TipoFactor")
+
+            #Obtenemos impuesto, tasa, base e importe
+            impuestoNombre = ImpuestoNode.getAttribute("Impuesto")
+            tasaCuota = ImpuestoNode.getAttribute("TasaOCuota")
+            base = ImpuestoNode.getAttribute("Base")
+            importe = ImpuestoNode.getAttribute("Importe")
+            impuesto.update(TipoImpuesto = tipoImpuesto)
+            impuesto.update(TipoFactor = factor)
+            impuesto.update(Impuesto = impuestoNombre)
+            impuesto.update(TasaOCuota = tasaCuota)
+            impuesto.update(Base = base)
+            impuesto.update(Importe = importe)
+
+            #Agregamos este impuesto a la lista
+            impuestos.update({"{0}:{1}".format(tipoImpuesto, impuestoNombre): impuesto})
+
+        # Agregamos el diccionario de impuestos al diccionario de concepto
+        concepto.update(Impuestos = impuestos)
+
+        # Agregamos el concepto al diccionario de conceptos
+        conceptos.append(concepto)
+
+    return conceptos
 
 def BeautifyCFDI(target = None, out = 'pdf', configPath = "./config.json"):
 
@@ -142,15 +239,20 @@ def BeautifyCFDI(target = None, out = 'pdf', configPath = "./config.json"):
 
         # Extraemos datos del emisor
         emisor = getDatosEmisor(CFDI, configDict)
-        #EXtraemos datos del receptor
+        # Extraemos datos del receptor
         receptor = getDatosReceptor(CFDI, configDict)
+        # Extraemos datos de los conceptos
+        conceptos = getConceptos(CFDI, configDict)
+
         print(emisor)
         print(receptor)
+        print(conceptos)
 
 
 
 def parseArguments():
-    """Esta función analiza los argumentos proporcionados por el usuario desde la línea de comandos"""
+    """Esta función analiza los argumentos proporcionados por el usuario desde la línea de comandos y los pasa a la función
+    principal (BeautifyCFDI)."""
 
     # Creamos una instancia de ArgumentParser
     main_parser = argparse.ArgumentParser()
