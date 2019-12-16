@@ -14,6 +14,52 @@ def getCatalogoValue(cat: str, id: str, configDict: dict):
 
     return targetValue
 
+def getDatosComprobante(CFDI: minidom.Document, configDict: dict):
+
+    # Obtenemos la raiz del documento
+    ComprobanteNode = CFDI.getElementsByTagName("cfdi:Comprobante")[0]
+
+    # Creamos un diccionario con los datos de la factura
+    comprobante = dict()
+
+    # Certificado, fecha, forma de pago, lugar de expedición, método de pago, moneda, no. de certificado, 
+    # sello, subtotal, total, tipo de comprobante
+    certificado = ComprobanteNode.getAttribute("Certificado")
+    fecha = ComprobanteNode.getAttribute("Fecha")
+    formaPago = ComprobanteNode.getAttribute("FormaPago")
+    #Descripción de la forma de pago (Catálogo del SAT)
+    formaPago =  getCatalogoValue("formaPago", formaPago, configDict)
+    lugarExpedicion = ComprobanteNode.getAttribute("LugarExpedicion")
+    metodoPago = ComprobanteNode.getAttribute("MetodoPago")
+    # Descripción del método de pago (Catálogo del SAT)
+    metodoPago = getCatalogoValue("metodoPago", metodoPago, configDict)
+    moneda = ComprobanteNode.getAttribute("Moneda")
+    # Descripción de la moneda (Catálogo del SAT)
+    moneda = "{0} ({1})".format(getCatalogoValue("moneda", moneda, configDict), moneda)
+    numCertificado = ComprobanteNode.getAttribute("NoCertificado")
+    sello = ComprobanteNode.getAttribute("Sello")
+    subtotal = ComprobanteNode.getAttribute("SubTotal")
+    total = ComprobanteNode.getAttribute("Total")
+    tipoComprobante = ComprobanteNode.getAttribute("TipoDeComprobante")
+    version = ComprobanteNode.getAttribute("Version")
+    comprobante.update(Certificado = certificado)
+    comprobante.update(Fecha = fecha)
+    comprobante.update(FormaPago = formaPago)
+    comprobante.update(LugarExpedicion = lugarExpedicion)
+    comprobante.update(MetodoPago = metodoPago)
+    comprobante.update(Moneda = moneda)
+    comprobante.update(NoCertificado = numCertificado)
+    comprobante.update(Sello = sello)
+    comprobante.update(Subtotal = subtotal)
+    comprobante.update(Total = total)
+    comprobante.update(TipoDeComprobante = tipoComprobante)
+    comprobante.update(Version = version)
+
+    # Verificamos la versión del certificado
+    if float(version) != 3.3:
+        raise ValueError("¡BeautifyCFDI se diseñó para trabajar con certificados versión 3.3!")
+
+    return comprobante
 
 def getDatosEmisor(CFDI: minidom.Document, configDict: dict):
 
@@ -40,6 +86,7 @@ def getDatosEmisor(CFDI: minidom.Document, configDict: dict):
     NombreEmisor = EmisorNode.getAttribute("Nombre")
     RfcEmisor = EmisorNode.getAttribute("Rfc")
     RegimenEmisor = EmisorNode.getAttribute("RegimenFiscal")
+    # Descripción del regimen del emisor (catálogo del SAT)
     RegimenEmisor = "{0} - {1}".format(RegimenEmisor, getCatalogoValue("regimenFiscal", RegimenEmisor, configDict))
     DomicilioEmisor = ""
     ContactoEmisor = ""
@@ -83,6 +130,7 @@ def getDatosReceptor(CFDI: minidom.Document, configDict: dict):
     NombreReceptor = ReceptorNode.getAttribute("Nombre")
     RfcReceptor = ReceptorNode.getAttribute("Rfc")
     UsoReceptor = ReceptorNode.getAttribute("UsoCFDI")
+    #Descripción uso CFDI del uso de CFDI
     UsoReceptor = "{0} - {1}".format(UsoReceptor, getCatalogoValue("usoCFDI", UsoReceptor, configDict))
     DomicilioReceptor = ""
     receptor.update(NombreReceptor = NombreReceptor)
@@ -111,13 +159,15 @@ def getConceptos(CFDI: minidom.Document, configDict: dict):
     except Exception as e:
         raise ValueError("El archivo de configuración tiene un error: {0}".format(e))
 
+    # Verificamos si el usuario quiere sobreescribir datos de los conceptos
+    try:
+        useDefault = configConceptos.get("useDefault")
+    except Exception as e:
+        raise ValueError("El archivo de configuración tiene un error: {0}".format(e))
+
     # Obtenemos la raiz del documento y el nodo de conceptos
     Comprobante = CFDI.getElementsByTagName("cfdi:Comprobante")[0]
     ConceptosNode = Comprobante.getElementsByTagName("cfdi:Conceptos")[0]
-
-    # Verificamos si el usuario quiere sobreescribir sus conceptos
-    if configConceptos.get("useDefault") is False:
-        pass
 
     # Obtenemos una lista de los conceptos registrados
     ConceptosList = ConceptosNode.getElementsByTagName("cfdi:Concepto")
@@ -135,6 +185,8 @@ def getConceptos(CFDI: minidom.Document, configDict: dict):
         cantidad = ConceptoNode.getAttribute("Cantidad")
         claveProd = ConceptoNode.getAttribute("ClaveProdServ")
         claveUnidad = ConceptoNode.getAttribute("ClaveUnidad")
+        #Descripción de unidad (de acuerdo con el catálogo del SAT)
+        claveUnidad = "{0} ({1})".format(getCatalogoValue("claveUnidad", claveUnidad, configDict), claveUnidad)
         descripcion = ConceptoNode.getAttribute("Descripcion")
         importe = ConceptoNode.getAttribute("Importe")
         valorUnitario = ConceptoNode.getAttribute("ValorUnitario")
@@ -144,6 +196,18 @@ def getConceptos(CFDI: minidom.Document, configDict: dict):
         concepto.update(Descripcion = descripcion)
         concepto.update(Importe = importe)
         concepto.update(ValorUnitario = valorUnitario)
+
+        # Si el usuario quiere sobreescribir
+        if useDefault is False:
+            if configConceptos["conceptosDict"].get(claveProd, None) is None:
+                print("\tNo se encontró información para el producto/servicio con clave {0}".format(claveProd))
+            else:
+                claveProd = configConceptos["conceptosDict"].get(claveProd, {}).get("miClave", "")
+                claveUnidad = configConceptos["conceptosDict"].get(claveProd, {}).get("miUnidad", "")
+                descripcion = configConceptos["conceptosDict"].get(claveProd, {}).get("miDescripcion", "")
+                concepto.update(ClaveProdServ = claveProd)
+                concepto.update(ClaveUnidad = claveUnidad)
+                concepto.update(Descripcion = descripcion)
 
         # Creamos una lista de impuesto para contener información de los impuestos
         impuestos = dict()
@@ -237,18 +301,19 @@ def BeautifyCFDI(target = None, out = 'pdf', configPath = "./config.json"):
         # Abrimos el cfdi
         CFDI = minidom.parse(fileNameDecoded)
 
+        # Extraemos datos del comprobante
+        comprobante = getDatosComprobante(CFDI, configDict)
         # Extraemos datos del emisor
         emisor = getDatosEmisor(CFDI, configDict)
         # Extraemos datos del receptor
         receptor = getDatosReceptor(CFDI, configDict)
         # Extraemos datos de los conceptos
         conceptos = getConceptos(CFDI, configDict)
-
+        
         print(emisor)
         print(receptor)
         print(conceptos)
-
-
+        print(comprobante)
 
 def parseArguments():
     """Esta función analiza los argumentos proporcionados por el usuario desde la línea de comandos y los pasa a la función
